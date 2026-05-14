@@ -115,6 +115,21 @@ from api.v1.schemas.common import HealthResponse
 from src.services.system_config_service import SystemConfigService
 
 
+def _setup_rate_limiter(app: FastAPI) -> None:
+    """Configure per-endpoint rate limiting via slowapi when available."""
+    try:
+        from slowapi import Limiter, _rate_limit_exceeded_handler
+        from slowapi.util import get_remote_address
+        from slowapi.errors import RateLimitExceeded
+
+        limiter = Limiter(key_func=get_remote_address, default_limits=["120/minute"])
+        app.state.limiter = limiter
+        app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+        logger.info("Rate limiter enabled: 120 req/min (default)")
+    except ImportError:
+        logger.info("slowapi not installed, rate limiting disabled")
+
+
 @asynccontextmanager
 async def app_lifespan(app: FastAPI):
     """Initialize and release shared services for the app lifecycle."""
@@ -187,7 +202,12 @@ def create_app(static_dir: Optional[Path] = None) -> FastAPI:
     )
 
     add_auth_middleware(app)
-    
+
+    # ============================================================
+    # Rate limiting (slowapi)
+    # ============================================================
+    _setup_rate_limiter(app)
+
     # ============================================================
     # 注册路由
     # ============================================================

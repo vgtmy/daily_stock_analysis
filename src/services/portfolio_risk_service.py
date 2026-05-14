@@ -1,14 +1,20 @@
 # -*- coding: utf-8 -*-
-"""Portfolio risk service for concentration, drawdown and stop-loss proximity."""
+"""Portfolio risk service for concentration, drawdown, stop-loss proximity,
+VaR, Sharpe ratio, and other advanced risk metrics."""
 
 from __future__ import annotations
 
+import math
 from datetime import date, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 from src.config import Config, get_config
 from src.repositories.portfolio_repo import PortfolioRepository
 from src.services.portfolio_service import PortfolioService
+
+
+# Trading days per year approximation for annualization
+_TRADING_DAYS_PER_YEAR = 252
 
 
 class PortfolioRiskService:
@@ -74,6 +80,14 @@ class PortfolioRiskService:
         )
         stop_loss = self._build_stop_loss(snapshot, thresholds)
 
+        # Advanced risk metrics: VaR, Sharpe, annualized return & volatility
+        advanced = self._build_advanced_metrics(
+            account_id=account_id,
+            as_of_date=as_of_date,
+            cost_method=cost_method,
+            lookback_days=thresholds["lookback_days"],
+        )
+
         return {
             "as_of": as_of_date.isoformat(),
             "account_id": account_id,
@@ -84,6 +98,105 @@ class PortfolioRiskService:
             "sector_concentration": sector_concentration,
             "drawdown": drawdown,
             "stop_loss": stop_loss,
+            "advanced": advanced,
+        }
+
+    # ----------------------------------------------------------------
+    # Advanced risk metrics: VaR, Sharpe, annualized return & volatility
+    # ----------------------------------------------------------------
+
+    def _build_advanced_metrics(
+        self,
+        *,
+        account_id: Optional[int],
+        as_of_date: date,
+        cost_method: str,
+        lookback_days: int,
+    ) -> Dict[str, Any]:
+        """Compute VaR (historical), Sharpe ratio, annualized return, and volatility."""
+        rows = self.repo.list_daily_snapshots_for_risk(
+            as_of=as_of_date,
+            cost_method=cost_method,
+            account_id=account_id,
+            lookback_days=lookback_days,
+        )
+        if not rows or len(rows) < 5:
+            return {
+                "series_points": len(rows) if rows else 0,
+                "message": "数据点不足（需要至少5个交易日）",
+                "var_95_daily": None,
+                "var_99_daily": None,
+                "sharpe_ratio": None,
+                "annualized_return_pct": None,
+                "annualized_volatility_pct": None,
+                "risk_free_rate_pct": None,
+            }
+
+        # Aggregate daily equity series (sum across accounts per date, in CNY)
+        grouped: Dict[str, float] = {}
+        stale_flag = False
+        for row in rows:
+            key = row.snapshot_date.isoformat()
+            converted, stale, _ = self.portfolio_service.convert_amount(
+                amount=float(row.total_equity or 0.0),
+                from_currency=str(row.base_currency or "CNY"),
+                to_currency="CNY",
+                as_of_date=row.snapshot_date,
+            )
+            grouped[key] = grouped.get(key, 0.0) + converted
+            stale_flag = stale_flag or stale or bool(row.fx_stale)
+
+        series: List[Tuple[str, float]] = sorted(grouped.items(), key=lambda item: item[0])
+        equities = [v for _, v in series]
+
+        # Daily log returns
+        daily_returns: List[float] = []
+        for i in range(1, len(equities)):
+            if equities[i - 1] > 0:
+                dr = math.log(equities[i] / equities[i - 1])
+                daily_returns.append(dr)
+
+        if len(daily_returns) < 5:
+            return {
+                "series_points": len(series),
+                "message": "收益数据点不足",
+            }
+
+        n = len(daily_returns)
+        mean_return = sum(daily_returns) / n
+        variance = sum((r - mean_return) ** 2 for r in daily_returns) / (n - 1)
+        std_dev = math.sqrt(variance) if variance > 0 else 0.0
+
+        # Historical VaR from empirical distribution
+        sorted_returns = sorted(daily_returns)
+        var_95_idx = max(0, int(n * 0.05))
+        var_99_idx = max(0, int(n * 0.01))
+        var_95_daily = -sorted_returns[var_95_idx] if var_95_idx < n else None
+        var_99_daily = -sorted_returns[var_99_idx] if var_99_idx < n else None
+
+        # Annualized metrics
+        annualized_return = mean_return * _TRADING_DAYS_PER_YEAR
+        annualized_vol = std_dev * math.sqrt(_TRADING_DAYS_PER_YEAR) if std_dev > 0 else 0.0
+
+        # Risk-free rate (configurable, default 1.5% for CNY)
+        risk_free_rate = float(getattr(self.config, "portfolio_risk_free_rate_pct", 1.5)) / 100.0
+        risk_free_daily = risk_free_rate / _TRADING_DAYS_PER_YEAR
+
+        # Sharpe ratio
+        excess_return = mean_return - risk_free_daily
+        sharpe = (excess_return / std_dev * math.sqrt(_TRADING_DAYS_PER_YEAR)) if std_dev > 0 else None
+
+        return {
+            "series_points": len(series),
+            "fx_stale": stale_flag,
+            "var_95_daily": round(var_95_daily, 6) if var_95_daily is not None else None,
+            "var_95_daily_pct": round(var_95_daily * 100, 4) if var_95_daily is not None else None,
+            "var_99_daily": round(var_99_daily, 6) if var_99_daily is not None else None,
+            "var_99_daily_pct": round(var_99_daily * 100, 4) if var_99_daily is not None else None,
+            "sharpe_ratio": round(sharpe, 4) if sharpe is not None else None,
+            "annualized_return_pct": round(annualized_return * 100, 4),
+            "annualized_volatility_pct": round(annualized_vol * 100, 4),
+            "risk_free_rate_pct": round(risk_free_rate * 100, 2),
         }
 
     def _ensure_drawdown_snapshot_window(

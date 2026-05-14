@@ -267,3 +267,4 @@ class PortfolioRiskResponse(BaseModel):
     sector_concentration: Dict[str, Any] = Field(default_factory=dict)
     drawdown: Dict[str, Any] = Field(default_factory=dict)
     stop_loss: Dict[str, Any] = Field(default_factory=dict)
+    advanced: Optional[Dict[str, Any]] = Field(default=None, description="VaR, Sharpe, annualized return/volatility")

@@ -27,6 +27,7 @@ import numpy as np
 from src.data.stock_index_loader import get_index_stock_name
 from src.data.stock_mapping import STOCK_NAME_MAP, is_meaningful_stock_name
 from .fundamental_adapter import AkshareFundamentalAdapter
+from src.utils.circuit_breaker import get_circuit_breaker_registry
 
 # 配置日志
 logger = logging.getLogger(__name__)
@@ -523,6 +524,23 @@ class DataFetcherManager:
         self._fundamental_cache_lock = RLock()
         self._fundamental_timeout_worker_limit = 8
         self._fundamental_timeout_slots = BoundedSemaphore(self._fundamental_timeout_worker_limit)
+        self._circuit_breaker_registry = get_circuit_breaker_registry()
+
+    def _skip_if_circuit_open(self, fetcher: BaseFetcher) -> bool:
+        """Return True if the fetcher's circuit breaker is open (skip this source)."""
+        breaker = self._circuit_breaker_registry.get(fetcher.name)
+        if not breaker.allow_request():
+            logger.info(
+                "[熔断器] %s 处于 OPEN 状态，跳过此次尝试", fetcher.name
+            )
+            return True
+        return False
+
+    def _cb_record_success(self, fetcher_name: str) -> None:
+        self._circuit_breaker_registry.get(fetcher_name).record_success()
+
+    def _cb_record_failure(self, fetcher_name: str) -> None:
+        self._circuit_breaker_registry.get(fetcher_name).record_failure()
 
     def _ensure_concurrency_guards(self) -> None:
         """Lazily initialize thread-safety primitives for test scaffolds using __new__."""
@@ -1098,6 +1116,9 @@ class DataFetcherManager:
                 for attempt, fetcher in enumerate(fetchers, start=1):
                     if fetcher.name != src_name:
                         continue
+                    if self._skip_if_circuit_open(fetcher):
+                        errors.append(f"[{fetcher.name}] 熔断器打开，跳过")
+                        break
                     try:
                         role = "首选" if src_name == source_order[0] else "兜底"
                         logger.info(
@@ -1113,6 +1134,7 @@ class DataFetcherManager:
                             days=days,
                         )
                         if df is not None and not df.empty:
+                            self._cb_record_success(fetcher.name)
                             elapsed = time.time() - request_start
                             logger.info(
                                 f"[数据源完成] {stock_code} 使用 [{fetcher.name}] 获取成功: "
@@ -1120,6 +1142,7 @@ class DataFetcherManager:
                             )
                             return df, fetcher.name
                     except Exception as e:
+                        self._cb_record_failure(fetcher.name)
                         error_type, error_reason = summarize_exception(e)
                         error_msg = f"[{fetcher.name}] ({error_type}) {error_reason}"
                         logger.warning(
@@ -1135,6 +1158,11 @@ class DataFetcherManager:
             raise DataFetchError(error_summary)
 
         for attempt, fetcher in enumerate(fetchers, start=1):
+            # Circuit breaker: skip fetchers with open circuit
+            if self._skip_if_circuit_open(fetcher):
+                errors.append(f"[{fetcher.name}] 熔断器打开，跳过")
+                continue
+
             try:
                 logger.info(f"[数据源尝试 {attempt}/{total_fetchers}] [{fetcher.name}] 获取 {stock_code}...")
                 df = self._call_fetcher_method(
@@ -1145,16 +1173,18 @@ class DataFetcherManager:
                     end_date=end_date,
                     days=days
                 )
-                
+
                 if df is not None and not df.empty:
+                    self._cb_record_success(fetcher.name)
                     elapsed = time.time() - request_start
                     logger.info(
                         f"[数据源完成] {stock_code} 使用 [{fetcher.name}] 获取成功: "
                         f"rows={len(df)}, elapsed={elapsed:.2f}s"
                     )
                     return df, fetcher.name
-                    
+
             except Exception as e:
+                self._cb_record_failure(fetcher.name)
                 error_type, error_reason = summarize_exception(e)
                 error_msg = f"[{fetcher.name}] ({error_type}) {error_reason}"
                 logger.warning(

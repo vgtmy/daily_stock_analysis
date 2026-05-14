@@ -9,6 +9,7 @@
 
 from .astrbot_sender import AstrbotSender
 from .custom_webhook_sender import CustomWebhookSender
+from .dispatcher import NotificationDispatcher, NotificationChannel as DispatcherChannel
 from .discord_sender import DiscordSender
 from .email_sender import EmailSender
 from .feishu_sender import FeishuSender
