@@ -59,33 +59,36 @@ class NotificationDispatcher:
     def _build_registry(self) -> None:
         """Register callables for each configured channel."""
         ns = self._ns
-        available = set(ns.get_available_channels())
+        # Compare by .value (string) to avoid cross-module enum identity mismatch:
+        # notification.py defines its own NotificationChannel enum; comparing instances
+        # from that class against this module's enum would always return False.
+        available = {ch.value for ch in ns.get_available_channels()}
 
-        if NotificationChannel.WECHAT in available:
+        if NotificationChannel.WECHAT.value in available:
             self._registry[NotificationChannel.WECHAT] = self._send_wechat
-        if NotificationChannel.FEISHU in available:
+        if NotificationChannel.FEISHU.value in available:
             self._registry[NotificationChannel.FEISHU] = self._send_feishu
-        if NotificationChannel.TELEGRAM in available:
+        if NotificationChannel.TELEGRAM.value in available:
             self._registry[NotificationChannel.TELEGRAM] = self._send_telegram
-        if NotificationChannel.EMAIL in available:
+        if NotificationChannel.EMAIL.value in available:
             self._registry[NotificationChannel.EMAIL] = self._send_email
-        if NotificationChannel.PUSHOVER in available:
+        if NotificationChannel.PUSHOVER.value in available:
             self._registry[NotificationChannel.PUSHOVER] = self._send_pushover
-        if NotificationChannel.NTFY in available:
+        if NotificationChannel.NTFY.value in available:
             self._registry[NotificationChannel.NTFY] = self._send_ntfy
-        if NotificationChannel.GOTIFY in available:
+        if NotificationChannel.GOTIFY.value in available:
             self._registry[NotificationChannel.GOTIFY] = self._send_gotify
-        if NotificationChannel.PUSHPLUS in available:
+        if NotificationChannel.PUSHPLUS.value in available:
             self._registry[NotificationChannel.PUSHPLUS] = self._send_pushplus
-        if NotificationChannel.SERVERCHAN3 in available:
+        if NotificationChannel.SERVERCHAN3.value in available:
             self._registry[NotificationChannel.SERVERCHAN3] = self._send_serverchan3
-        if NotificationChannel.CUSTOM in available:
+        if NotificationChannel.CUSTOM.value in available:
             self._registry[NotificationChannel.CUSTOM] = self._send_custom
-        if NotificationChannel.DISCORD in available:
+        if NotificationChannel.DISCORD.value in available:
             self._registry[NotificationChannel.DISCORD] = self._send_discord
-        if NotificationChannel.SLACK in available:
+        if NotificationChannel.SLACK.value in available:
             self._registry[NotificationChannel.SLACK] = self._send_slack
-        if NotificationChannel.ASTRBOT in available:
+        if NotificationChannel.ASTRBOT.value in available:
             self._registry[NotificationChannel.ASTRBOT] = self._send_astrbot
 
     @property
