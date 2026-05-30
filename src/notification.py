@@ -728,8 +728,6 @@ class NotificationService(
                     f"**Confidence：{confidence_stars}**",
                     "",
                 ])
-
-                self._append_market_snapshot(report_lines, result)
                 
                 # 核心看点
                 if hasattr(result, 'key_points') and result.key_points:
@@ -982,124 +980,6 @@ class NotificationService(
                     "",
                 ])
                 
-                # ========== 舆情与基本面概览（放在最前面）==========
-                intel = dashboard.get('intelligence', {}) if dashboard else {}
-                if intel:
-                    report_lines.extend([
-                        f"### 📰 {labels['info_heading']}",
-                        "",
-                    ])
-                    # 舆情情绪总结
-                    if intel.get('sentiment_summary'):
-                        report_lines.append(f"**💭 {labels['sentiment_summary_label']}**: {intel['sentiment_summary']}")
-                    # 业绩预期
-                    if intel.get('earnings_outlook'):
-                        report_lines.append(f"**📊 {labels['earnings_outlook_label']}**: {intel['earnings_outlook']}")
-                    # 风险警报（醒目显示）
-                    risk_alerts = intel.get('risk_alerts', [])
-                    if risk_alerts:
-                        report_lines.append("")
-                        report_lines.append(f"**🚨 {labels['risk_alerts_label']}**:")
-                        for alert in risk_alerts:
-                            report_lines.append(f"- {alert}")
-                    # 利好催化
-                    catalysts = intel.get('positive_catalysts', [])
-                    if catalysts:
-                        report_lines.append("")
-                        report_lines.append(f"**✨ {labels['positive_catalysts_label']}**:")
-                        for cat in catalysts:
-                            report_lines.append(f"- {cat}")
-                    # 最新消息
-                    if intel.get('latest_news'):
-                        report_lines.append("")
-                        report_lines.append(f"**📢 {labels['latest_news_label']}**: {intel['latest_news']}")
-                    report_lines.append("")
-                
-                # ========== 核心结论 ==========
-                core = dashboard.get('core_conclusion', {}) if dashboard else {}
-                one_sentence = core.get('one_sentence', result.analysis_summary)
-                time_sense = core.get('time_sensitivity', labels['default_time_sensitivity'])
-                pos_advice = core.get('position_advice', {})
-                
-                report_lines.extend([
-                    f"### 📌 {labels['core_conclusion_heading']}",
-                    "",
-                    f"**{signal_emoji} {signal_text}** | {localize_trend_prediction(result.trend_prediction, report_language)}",
-                    "",
-                    f"> **{labels['one_sentence_label']}**: {one_sentence}",
-                    "",
-                    f"⏰ **{labels['time_sensitivity_label']}**: {time_sense}",
-                    "",
-                ])
-                # 持仓分类建议
-                if pos_advice:
-                    report_lines.extend([
-                        f"| {labels['position_status_label']} | {labels['action_advice_label']} |",
-                        "|---------|---------|",
-                        f"| 🆕 **{labels['no_position_label']}** | {pos_advice.get('no_position', localize_operation_advice(result.operation_advice, report_language))} |",
-                        f"| 💼 **{labels['has_position_label']}** | {pos_advice.get('has_position', labels['continue_holding'])} |",
-                        "",
-                    ])
-
-                self._append_market_snapshot(report_lines, result)
-                
-                # ========== 数据透视 ==========
-                data_persp = dashboard.get('data_perspective', {}) if dashboard else {}
-                if data_persp:
-                    trend_data = data_persp.get('trend_status', {})
-                    price_data = data_persp.get('price_position', {})
-                    vol_data = data_persp.get('volume_analysis', {})
-                    chip_data = data_persp.get('chip_structure', {})
-                    
-                    report_lines.extend([
-                        f"### 📊 {labels['data_perspective_heading']}",
-                        "",
-                    ])
-                    # 趋势状态
-                    if trend_data:
-                        is_bullish = (
-                            f"✅ {labels['yes_label']}"
-                            if trend_data.get('is_bullish', False)
-                            else f"❌ {labels['no_label']}"
-                        )
-                        report_lines.extend([
-                            f"**{labels['ma_alignment_label']}**: {trend_data.get('ma_alignment', 'N/A')} | "
-                            f"{labels['bullish_alignment_label']}: {is_bullish} | "
-                            f"{labels['trend_strength_label']}: {trend_data.get('trend_score', 'N/A')}/100",
-                            "",
-                        ])
-                    # 价格位置
-                    if price_data:
-                        bias_status = price_data.get('bias_status', 'N/A')
-                        report_lines.extend([
-                            f"| {labels['price_metrics_label']} | {labels['current_price_label']} |",
-                            "|---------|------|",
-                            f"| {labels['current_price_label']} | {price_data.get('current_price', 'N/A')} |",
-                            f"| {labels['ma5_label']} | {price_data.get('ma5', 'N/A')} |",
-                            f"| {labels['ma10_label']} | {price_data.get('ma10', 'N/A')} |",
-                            f"| {labels['ma20_label']} | {price_data.get('ma20', 'N/A')} |",
-                            f"| {labels['bias_ma5_label']} | {price_data.get('bias_ma5', 'N/A')}% {bias_status} |",
-                            f"| {labels['support_level_label']} | {price_data.get('support_level', 'N/A')} |",
-                            f"| {labels['resistance_level_label']} | {price_data.get('resistance_level', 'N/A')} |",
-                            "",
-                        ])
-                    # 量能分析
-                    if vol_data:
-                        report_lines.extend([
-                            f"**{labels['volume_label']}**: {labels['volume_ratio_label']} {vol_data.get('volume_ratio', 'N/A')} ({vol_data.get('volume_status', '')}) | "
-                            f"{labels['turnover_rate_label']} {vol_data.get('turnover_rate', 'N/A')}%",
-                            f"💡 *{vol_data.get('volume_meaning', '')}*",
-                            "",
-                        ])
-                    # 筹码结构
-                    if chip_data:
-                        chip_health = localize_chip_health(chip_data.get('chip_health', 'N/A'), report_language)
-                        report_lines.extend([
-                            f"**{labels['chip_label']}**: {chip_data.get('profit_ratio', 'N/A')} | {chip_data.get('avg_cost', 'N/A')} | "
-                            f"{chip_data.get('concentration', 'N/A')} {chip_health}",
-                            "",
-                        ])
-                
                 # ========== 作战计划 ==========
                 battle = dashboard.get('battle_plan', {}) if dashboard else {}
                 if battle:
@@ -1130,16 +1010,6 @@ class NotificationService(
                             f"- {labels['risk_control_label']}: {position.get('risk_control', 'N/A')}",
                             "",
                         ])
-                    # 检查清单
-                    checklist = battle.get('action_checklist', []) if battle else []
-                    if checklist:
-                        report_lines.extend([
-                            f"**✅ {labels['checklist_heading']}**",
-                            "",
-                        ])
-                        for item in checklist:
-                            report_lines.append(f"- {item}")
-                        report_lines.append("")
                 
                 # 如果没有 dashboard，显示传统格式
                 if not dashboard:
@@ -1516,8 +1386,6 @@ class NotificationService(
             f"> {report_date} | {labels['score_label']}: **{result.sentiment_score}** | {localize_trend_prediction(result.trend_prediction, report_language)}",
             "",
         ]
-
-        self._append_market_snapshot(lines, result)
         
         # 核心决策（一句话）
         one_sentence = core.get('one_sentence', result.analysis_summary) if core else result.analysis_summary
@@ -1528,46 +1396,6 @@ class NotificationService(
                 f"**{signal_text}**: {one_sentence}",
                 "",
             ])
-        
-        # 重要信息（舆情+基本面）
-        info_added = False
-        if intel:
-            if intel.get('earnings_outlook'):
-                if not info_added:
-                    lines.append(f"### 📰 {labels['info_heading']}")
-                    lines.append("")
-                    info_added = True
-                lines.append(f"📊 **{labels['earnings_outlook_label']}**: {str(intel['earnings_outlook'])[:100]}")
-            
-            if intel.get('sentiment_summary'):
-                if not info_added:
-                    lines.append(f"### 📰 {labels['info_heading']}")
-                    lines.append("")
-                    info_added = True
-                lines.append(f"💭 **{labels['sentiment_summary_label']}**: {str(intel['sentiment_summary'])[:80]}")
-            
-            # 风险警报
-            risks = intel.get('risk_alerts', [])
-            if risks:
-                if not info_added:
-                    lines.append(f"### 📰 {labels['info_heading']}")
-                    lines.append("")
-                    info_added = True
-                lines.append("")
-                lines.append(f"🚨 **{labels['risk_alerts_label']}**:")
-                for risk in risks[:3]:
-                    lines.append(f"- {str(risk)[:60]}")
-            
-            # 利好催化
-            catalysts = intel.get('positive_catalysts', [])
-            if catalysts:
-                lines.append("")
-                lines.append(f"✨ **{labels['positive_catalysts_label']}**:")
-                for cat in catalysts[:3]:
-                    lines.append(f"- {str(cat)[:60]}")
-        
-        if info_added:
-            lines.append("")
         
         # 狙击点位
         sniper = battle.get('sniper_points', {}) if battle else {}
