@@ -17,39 +17,8 @@
 {% set intel = dashboard.get('intelligence') or {} %}
 {% set core = dashboard.get('core_conclusion') or {} %}
 {% set battle = dashboard.get('battle_plan') or {} %}
-{% set data_persp = dashboard.get('data_perspective') or {} %}
 
 ## {{ e.signal_emoji }} {{ e.stock_name }} ({{ result.code }})
-
-{% if intel %}
-### 📰 {{ labels.info_heading }}
-
-{% if intel.get('sentiment_summary') %}
-**💭 {{ labels.sentiment_summary_label }}**: {{ intel.sentiment_summary }}
-{% endif %}
-{% if intel.get('earnings_outlook') %}
-**📊 {{ labels.earnings_outlook_label }}**: {{ intel.earnings_outlook }}
-{% endif %}
-{% if intel.get('risk_alerts') %}
-
-**🚨 {{ labels.risk_alerts_label }}**:
-{% for alert in intel.risk_alerts %}
-- {{ alert }}
-{% endfor %}
-{% endif %}
-{% if intel.get('positive_catalysts') %}
-
-**✨ {{ labels.positive_catalysts_label }}**:
-{% for cat in intel.positive_catalysts %}
-- {{ cat }}
-{% endfor %}
-{% endif %}
-{% if intel.get('latest_news') %}
-
-**📢 {{ labels.latest_news_label }}**: {{ intel.latest_news }}
-{% endif %}
-
-{% endif %}
 
 ### 📌 {{ labels.core_conclusion_heading }}
 
@@ -65,41 +34,6 @@
 |---------|---------|
 | 🆕 **{{ labels.no_position_label }}** | {{ pos_advice.get('no_position', localize_operation_advice(result.operation_advice, report_language)) }} |
 | 💼 **{{ labels.has_position_label }}** | {{ pos_advice.get('has_position', labels.continue_holding) }} |
-{% endif %}
-
-{{ market_snapshot(result) }}
-
-{% if data_persp %}
-### 📊 {{ labels.data_perspective_heading }}
-
-{% set trend_data = data_persp.get('trend_status', {}) %}
-{% if trend_data %}
-**{{ labels.ma_alignment_label }}**: {{ trend_data.get('ma_alignment', 'N/A') }} | {{ labels.bullish_alignment_label }}: {{ '✅ ' ~ labels.yes_label if trend_data.get('is_bullish') else '❌ ' ~ labels.no_label }} | {{ labels.trend_strength_label }}: {{ trend_data.get('trend_score', 'N/A') }}/100
-{% endif %}
-
-{% set price_data = data_persp.get('price_position', {}) %}
-{% if price_data %}
-| {{ labels.price_metrics_label }} | {{ labels.current_price_label }} |
-|---------|------|
-| {{ labels.current_price_label }} | {{ price_data.get('current_price', 'N/A') }} |
-| {{ labels.ma5_label }} | {{ price_data.get('ma5', 'N/A') }} |
-| {{ labels.ma10_label }} | {{ price_data.get('ma10', 'N/A') }} |
-| {{ labels.ma20_label }} | {{ price_data.get('ma20', 'N/A') }} |
-| {{ labels.bias_ma5_label }} | {{ price_data.get('bias_ma5', 'N/A') }}% {{ price_data.get('bias_status', 'N/A') }} |
-| {{ labels.support_level_label }} | {{ price_data.get('support_level', 'N/A') }} |
-| {{ labels.resistance_level_label }} | {{ price_data.get('resistance_level', 'N/A') }} |
-{% endif %}
-
-{% set vol_data = data_persp.get('volume_analysis', {}) %}
-{% if vol_data %}
-**{{ labels.volume_label }}**: {{ labels.volume_ratio_label }} {{ vol_data.get('volume_ratio', 'N/A') }} ({{ vol_data.get('volume_status', '') }}) | {{ labels.turnover_rate_label }} {{ vol_data.get('turnover_rate', 'N/A') }}%
-💡 *{{ vol_data.get('volume_meaning', '') }}*
-{% endif %}
-
-{% set chip_data = data_persp.get('chip_structure', {}) %}
-{% if chip_data %}
-**{{ labels.chip_label }}**: {{ chip_data.get('profit_ratio', 'N/A') }} | {{ chip_data.get('avg_cost', 'N/A') }} | {{ chip_data.get('concentration', 'N/A') }} {{ localize_chip_health(chip_data.get('chip_health', 'N/A'), report_language) }}
-{% endif %}
 {% endif %}
 
 {% if battle %}
@@ -122,14 +56,6 @@
 **💰 {{ labels.suggested_position_label }}**: {{ position.get('suggested_position', 'N/A') }}
 - {{ labels.entry_plan_label }}: {{ position.get('entry_plan', 'N/A') }}
 - {{ labels.risk_control_label }}: {{ position.get('risk_control', 'N/A') }}
-{% endif %}
-
-{% set checklist = battle.get('action_checklist', []) %}
-{% if checklist %}
-**✅ {{ labels.checklist_heading }}**
-{% for item in checklist %}
-- {{ item }}
-{% endfor %}
 {% endif %}
 {% endif %}
 
